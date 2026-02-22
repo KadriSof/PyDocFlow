@@ -1,0 +1,29 @@
+[project]
+name = "pydocflow"
+version = "0.1.0"
+description = "Document processing service with OCR and LLM-powered text extraction and enhancement"
+requires-python = ">=3.12"
+authors = [
+    { name = "M.S.KADRI", email = "ms.kadri.dev@gmail.com" }
+]
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.129.0",
+    "litellm>=1.81.14",
+    "motor>=3.7.1",
+    "odmantic>=1.1.0",
+    "pdf2image>=1.17.0",
+    "pydantic-settings>=2.13.1",
+    "pymongo>=4.16.0",
+    "pymupdf>=1.27.1",
+    "pytesseract>=0.3.13",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=0.24.0",
+    "python-multipart>=0.0.22",
+    "tenacity>=9.1.4",
+    "uvicorn>=0.41.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
