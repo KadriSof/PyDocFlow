@@ -20,5 +20,8 @@ class Document(Model):
     metadata: dict = Field(default_factory=dict)
 
     model_config: ClassVar[dict] = {
-        "indexes": lambda: [Index(Document.file_id, Document.file_name, unique=True)]
+        "indexes": lambda: [
+            Index(Document.file_name, unique=True),
+            Index(Document.created_at),
+        ]
     }

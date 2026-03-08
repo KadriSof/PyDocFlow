@@ -139,21 +139,29 @@ class MongoDBClient(BaseClient):
 
     async def _create_indexes(self) -> None:
         """
-        Create necessary database indexes.
+        Create necessary database indexes based on ODMantic model definitions.
+
+        ODMantic automatically creates indexes defined in model_config["indexes"].
+        This method ensures additional runtime indexes if needed.
 
         Raises:
             RuntimeError: If index creation fails.
         """
         try:
-            collection = self.db.get_collection("ocr_result")
+            # ODMantic handles indexes defined in Document.model_config["indexes"]
+            # The engine.ensure_indexes() is called automatically on first use
+            # but we explicitly ensure them here for clarity
+            from persistence.mongodb.models import Document
 
-            # Create a unique index on the "file_name" field
+            collection = self.db.get_collection(Document.__collection__)
+
+            # Create a unique index on the "file_name" field (also defined in model_config)
             await collection.create_index("file_name", unique=True)
-            logger.info("Created unique index on 'file_name' field.")
+            logger.info("Ensured unique index on 'file_name' field.")
 
             # Create an index on 'created_at' for efficient time-based queries
             await collection.create_index("created_at")
-            logger.info("Created index on 'created_at' field.")
+            logger.info("Ensured index on 'created_at' field.")
 
         except Exception as e:
             logger.error(f"Failed to create indexes: {type(e).__name__}: {e}")
@@ -174,7 +182,7 @@ class MongoDBClient(BaseClient):
         self._db = self.client.get_database(self.settings.mongo_db)
         self._engine = AIOEngine(client=self.client, database=self.settings.mongo_db)
 
-        # await self._create_indexes()  # TODO: To be refactored according to ODMantic Indexes management.
+        await self._create_indexes()
         logger.info(f"Database manager initialized for database: {self.settings.mongo_db}")
 
     async def disconnect(self) -> None:
