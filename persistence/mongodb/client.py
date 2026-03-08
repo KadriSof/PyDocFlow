@@ -237,42 +237,42 @@ class MongoDBClient(BaseClient):
 
 
 # Global instance for backward compatibility and convenience
-_db_manager: MongoDBClient | None = None
+_client: MongoDBClient | None = None
 
 
-def get_db_manager() -> MongoDBClient:
-    """Get the global DatabaseManager instance."""
-    global _db_manager
-    if _db_manager is None:
-        _db_manager = MongoDBClient()
-    return _db_manager
+def get_client() -> MongoDBClient:
+    """Get the global MongoDBClient instance."""
+    global _client
+    if _client is None:
+        _client = MongoDBClient()
+    return _client
 
 
 # Backward compatibility functions (deprecated - use DatabaseManager directly)
 async def connect_to_db() -> None:
     """Initialize the global database connection."""
-    await get_db_manager().connect()
+    await get_client().connect()
 
 
 async def close_db_connection() -> None:
     """Close the global database connection."""
-    await get_db_manager().disconnect()
+    await get_client().disconnect()
 
 
 # Expose async functions for backward compatibility
 async def client() -> AsyncIOMotorClient | None:
     """Get the global client (backward compatibility)."""
-    db_manager = get_db_manager()
+    db_manager = get_client()
     return db_manager.client if db_manager.is_connected else None
 
 
 async def db() -> AsyncIOMotorDatabase | None:
     """Get the global database (backward compatibility)."""
-    db_manager = get_db_manager()
+    db_manager = get_client()
     return db_manager.db if db_manager.is_connected else None
 
 
 async def engine() -> AIOEngine | None:
     """Get the global engine (backward compatibility)."""
-    db_manager = get_db_manager()
+    db_manager = get_client()
     return db_manager.engine if db_manager.is_connected else None

@@ -4,7 +4,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from persistence.base import BaseRepository
 from persistence.mongodb.models import Document, Page
-from persistence.mongodb.client import MongoDBClient, client
+from persistence.mongodb.client import MongoDBClient, get_client, DB_NOT_CONNECTED_ERROR
 
 
 class DocumentRepository(BaseRepository[Document]):
@@ -16,8 +16,13 @@ class DocumentRepository(BaseRepository[Document]):
 
         Args:
             db_manager: DatabaseManager instance. If None, uses the global instance.
+
+        Raises:
+            RuntimeError: If db_manager is not provided and not connected.
         """
-        self._db_manager = db_manager or client()
+        self._db_manager = db_manager or get_client()
+        if not self._db_manager.is_connected:
+            raise RuntimeError(DB_NOT_CONNECTED_ERROR)
 
     @property
     def _engine(self):
@@ -137,8 +142,13 @@ class PageRepository:
 
         Args:
             db_manager: DatabaseManager instance. If None, uses the global instance.
+
+        Raises:
+            RuntimeError: If db_manager is not provided and not connected.
         """
-        self._db_manager = db_manager or client()
+        self._db_manager = db_manager or get_client()
+        if not self._db_manager.is_connected:
+            raise RuntimeError(DB_NOT_CONNECTED_ERROR)
 
     @property
     def _engine(self):
