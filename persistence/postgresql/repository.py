@@ -1,13 +1,13 @@
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from persistence.base import BaseRepository
 from persistence.postgresql.models import Document, Page
-from persistence.postgresql.client import PostgreSQLClient, client
+from persistence.postgresql.client import PostgreSQLClient, get_client, DB_NOT_CONNECTED_ERROR
 
 
 class DocumentRepository(BaseRepository[Document]):
@@ -19,11 +19,16 @@ class DocumentRepository(BaseRepository[Document]):
 
         Args:
             db_manager: DatabaseManager instance. If None, uses the global instance.
+
+        Raises:
+            RuntimeError: If db_manager is not provided and not connected.
         """
-        self._db_manager = db_manager or client()
+        self._db_manager = db_manager or get_client()
+        if not self._db_manager.is_connected:
+            raise RuntimeError(DB_NOT_CONNECTED_ERROR)
 
     @property
-    def _session_factory(self):
+    def _session_factory(self) -> async_sessionmaker[AsyncSession]:
         """Get the async session factory from the database manager."""
         return self._db_manager.db
 
@@ -49,36 +54,44 @@ class DocumentRepository(BaseRepository[Document]):
                 # Document already exists, update it
                 return await self.save(document)
 
-    async def get_by_id(self, file_id: str) -> Document | None:
+    async def get_by_id(self, file_id: str, session: AsyncSession | None = None) -> Document | None:
         """
         Retrieve a document by its file_id.
 
         Args:
             file_id: The unique identifier of the document.
+            session: Optional session to use. If None, creates a new session.
 
         Returns:
             The document if found, None otherwise.
         """
-        async with self._session_factory() as session:
-            result = await session.execute(
-                select(Document).where(Document.file_id == file_id)
-            )
+        if session is not None:
+            result = await session.execute(select(Document).where(Document.file_id == file_id))
             return result.scalar_one_or_none()
 
-    async def get_by_file_name(self, file_name: str) -> Document | None:
+        async with self._session_factory() as sess:
+            result = await sess.execute(select(Document).where(Document.file_id == file_id))
+            return result.scalar_one_or_none()
+
+    async def get_by_file_name(
+        self, file_name: str, session: AsyncSession | None = None
+    ) -> Document | None:
         """
         Retrieve a document by its file name.
 
         Args:
             file_name: The name of the file to retrieve.
+            session: Optional session to use. If None, creates a new session.
 
         Returns:
             The document if found, None otherwise.
         """
-        async with self._session_factory() as session:
-            result = await session.execute(
-                select(Document).where(Document.file_name == file_name)
-            )
+        if session is not None:
+            result = await session.execute(select(Document).where(Document.file_name == file_name))
+            return result.scalar_one_or_none()
+
+        async with self._session_factory() as sess:
+            result = await sess.execute(select(Document).where(Document.file_name == file_name))
             return result.scalar_one_or_none()
 
     async def list_all(self, skip: int = 0, limit: int = 100) -> List[Document]:
@@ -93,9 +106,7 @@ class DocumentRepository(BaseRepository[Document]):
             List of documents.
         """
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(Document).offset(skip).limit(limit)
-            )
+            result = await session.execute(select(Document).offset(skip).limit(limit))
             return list(result.scalars().all())
 
     async def delete(self, file_id: str) -> bool:
@@ -109,7 +120,7 @@ class DocumentRepository(BaseRepository[Document]):
             True if deleted successfully, False if document not found.
         """
         async with self._session_factory() as session:
-            document = await self.get_by_id(file_id)
+            document = await self.get_by_id(file_id, session=session)
             if document:
                 await session.delete(document)
                 await session.commit()
@@ -117,10 +128,10 @@ class DocumentRepository(BaseRepository[Document]):
             return False
 
     async def save_result(
-            self,
-            file_name: str,
-            pages: List[Page],
-            metadata: dict = None
+        self,
+        file_name: str,
+        pages: List[Page],
+        metadata: Optional[dict] = None,
     ) -> Document:
         """
         Save a document with its pages to the database.
@@ -136,8 +147,8 @@ class DocumentRepository(BaseRepository[Document]):
         from datetime import datetime
 
         async with self._session_factory() as session:
-            # Check if document already exists
-            existing_document = await self.get_by_file_name(file_name)
+            # Check if document already exists (using same session)
+            existing_document = await self.get_by_file_name(file_name, session=session)
 
             if existing_document:
                 # Update existing document
@@ -154,7 +165,7 @@ class DocumentRepository(BaseRepository[Document]):
                 file_id=file_name,
                 file_name=file_name,
                 pages=pages,
-                metadata_=metadata or {}
+                metadata_=metadata or {},
             )
 
             session.add(document)
@@ -172,31 +183,42 @@ class PageRepository:
 
         Args:
             db_manager: DatabaseManager instance. If None, uses the global instance.
+
+        Raises:
+            RuntimeError: If db_manager is not provided and not connected.
         """
-        self._db_manager = db_manager or client()
+        self._db_manager = db_manager or get_client()
+        if not self._db_manager.is_connected:
+            raise RuntimeError(DB_NOT_CONNECTED_ERROR)
 
     @property
-    def _session_factory(self):
+    def _session_factory(self) -> async_sessionmaker[AsyncSession]:
         """Get the async session factory from the database manager."""
         return self._db_manager.db
 
-    async def get_page(self, file_id: str, page_number: int) -> Page | None:
+    async def get_page(
+        self, file_id: str, page_number: int, session: AsyncSession | None = None
+    ) -> Page | None:
         """
         Retrieve a specific page from a document.
 
         Args:
             file_id: The file_id of the document.
             page_number: The page number to retrieve.
+            session: Optional session to use. If None, creates a new session.
 
         Returns:
             The page if found, None otherwise.
         """
-        async with self._session_factory() as session:
+        if session is not None:
             result = await session.execute(
-                select(Page).where(
-                    Page.document_id == file_id,
-                    Page.page_number == page_number
-                )
+                select(Page).where(Page.document_id == file_id, Page.page_number == page_number)
+            )
+            return result.scalar_one_or_none()
+
+        async with self._session_factory() as sess:
+            result = await sess.execute(
+                select(Page).where(Page.document_id == file_id, Page.page_number == page_number)
             )
             return result.scalar_one_or_none()
 
@@ -216,12 +238,7 @@ class PageRepository:
             )
             return list(result.scalars().all())
 
-    async def update_page_content(
-            self,
-            file_id: str,
-            page_number: int,
-            content: str
-    ) -> bool:
+    async def update_page_content(self, file_id: str, page_number: int, content: str) -> bool:
         """
         Update the content of a specific page.
 
@@ -236,7 +253,8 @@ class PageRepository:
         from datetime import datetime
 
         async with self._session_factory() as session:
-            page = await self.get_page(file_id, page_number)
+            # Get page using same session
+            page = await self.get_page(file_id, page_number, session=session)
             if page:
                 page.content = content
                 # Update parent document's updated_at
