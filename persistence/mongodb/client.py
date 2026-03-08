@@ -34,13 +34,13 @@ class MongoDBClient(BaseClient):
     """
 
     def __init__(
-            self,
-            settings: Settings | None = None,
-            max_pool_size: int = 100,
-            min_pool_size: int = 10,
-            max_idle_time_ms: int = 300000,
-            connect_timeout_ms: int = 5000,
-            server_selection_timeout_ms: int = 30000,
+        self,
+        settings: Settings | None = None,
+        max_pool_size: int = 100,
+        min_pool_size: int = 10,
+        max_idle_time_ms: int = 300000,
+        connect_timeout_ms: int = 5000,
+        server_selection_timeout_ms: int = 30000,
     ) -> None:
         """
         Initialize the DatabaseManager.
@@ -112,7 +112,7 @@ class MongoDBClient(BaseClient):
             TimeoutError: If connection times out.
         """
         try:
-            _client = AsyncIOMotorClient(
+            _client: AsyncIOMotorClient = AsyncIOMotorClient(
                 self.settings.mongo_uri,
                 maxPoolSize=self._max_pool_size,
                 minPoolSize=self._min_pool_size,
