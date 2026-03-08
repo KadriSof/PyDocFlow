@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -39,13 +40,13 @@ class PostgreSQLClient(BaseClient):
     """
 
     def __init__(
-            self,
-            settings: Settings | None = None,
-            pool_size: int = 10,
-            max_overflow: int = 20,
-            pool_timeout: int = 30,
-            pool_recycle: int = 1800,
-            echo: bool = False,
+        self,
+        settings: Settings | None = None,
+        pool_size: int = 10,
+        max_overflow: int = 20,
+        pool_timeout: int = 30,
+        pool_recycle: int = 1800,
+        echo: bool = False,
     ) -> None:
         """
         Initialize the PostgreSQL client.
@@ -71,13 +72,6 @@ class PostgreSQLClient(BaseClient):
         self._echo = echo
 
     @property
-    def client(self) -> AsyncEngine:
-        """Get the SQLAlchemy async engine. Raises RuntimeError if not connected."""
-        if self._engine is None:
-            raise RuntimeError(DB_NOT_CONNECTED_ERROR)
-        return self._engine
-
-    @property
     def db(self) -> async_sessionmaker[AsyncSession]:
         """Get the async session factory. Raises RuntimeError if not connected."""
         if self._async_session_factory is None:
@@ -86,10 +80,25 @@ class PostgreSQLClient(BaseClient):
 
     @property
     def engine(self) -> AsyncEngine:
-        """Get the SQLAlchemy async engine. Raises RuntimeError if not connected."""
+        """
+        Get the SQLAlchemy async engine. Raises RuntimeError if not connected.
+
+        Note: For SQLAlchemy, 'engine' and 'client' are the same object since
+        AsyncEngine serves as both the raw connection client and ORM engine.
+        """
         if self._engine is None:
             raise RuntimeError(DB_NOT_CONNECTED_ERROR)
         return self._engine
+
+    @property
+    def client(self) -> AsyncEngine:
+        """
+        Get the SQLAlchemy async engine (raw client). Raises RuntimeError if not connected.
+
+        Note: For SQLAlchemy, this returns the same object as 'engine' since
+        AsyncEngine serves as both the raw connection client and ORM engine.
+        """
+        return self.engine
 
     @property
     def is_connected(self) -> bool:
@@ -126,7 +135,7 @@ class PostgreSQLClient(BaseClient):
 
             # Test the connection
             async with _engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
 
             logger.info(
                 "Successfully connected to PostgreSQL with connection pooling "
@@ -153,8 +162,9 @@ class PostgreSQLClient(BaseClient):
             # Import models to ensure they are registered with SQLAlchemy metadata
             from persistence.postgresql.models import Document, Page
 
-            async with self._engine.begin() as conn:
-                await conn.run_sync(Document.metadata.create_all)
+            if self._engine is not None:
+                async with self._engine.begin() as conn:
+                    await conn.run_sync(Document.metadata.create_all)
 
             logger.info("Database tables created successfully.")
 
@@ -222,9 +232,12 @@ class PostgreSQLClient(BaseClient):
                 return {"status": "disconnected", "healthy": False}
 
             # Test connection with a simple query
-            async with self._engine.begin() as conn:
-                result = await conn.execute("SELECT version()")
-                version = result.scalar()
+            if self._engine is not None:
+                async with self._engine.begin() as conn:
+                    result = await conn.execute(text("SELECT version()"))
+                    version = result.scalar()
+            else:
+                version = "unknown"
 
             return {
                 "status": "connected",
@@ -246,23 +259,27 @@ class PostgreSQLClient(BaseClient):
 _db_manager: PostgreSQLClient | None = None
 
 
-def get_db_manager() -> PostgreSQLClient:
-    """Get the global DatabaseManager instance."""
+def get_client() -> PostgreSQLClient:
+    """Get the global PostgreSQLClient instance."""
     global _db_manager
     if _db_manager is None:
         _db_manager = PostgreSQLClient()
     return _db_manager
 
 
+# Alias for consistency with MongoDB
+get_db_manager = get_client
+
+
 # Backward compatibility functions (deprecated - use DatabaseManager directly)
 async def connect_to_db() -> None:
     """Initialize the global database connection."""
-    await get_db_manager().connect()
+    await get_client().connect()
 
 
 async def close_db_connection() -> None:
     """Close the global database connection."""
-    await get_db_manager().disconnect()
+    await get_client().disconnect()
 
 
 # Expose async functions for backward compatibility
