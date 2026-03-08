@@ -1,6 +1,7 @@
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from odmantic import AIOEngine
@@ -11,19 +12,18 @@ from tenacity import (
     wait_exponential,
 )
 
-from persistence.settings import Settings
+from persistence.base import BaseClient
+from persistence.mongodb.settings import Settings
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 DB_NOT_CONNECTED_ERROR = "Database not connected. Call connect() first."
 
 
-class DatabaseManager:
+class MongoDBClient(BaseClient):
     """
-    Production-ready database manager class that encapsulates MongoDB connection logic.
-    
+    Production-ready MongoDB client implementation.
+
     Features:
     - Connection pooling for better performance under high load
     - Robust error handling with specific exception handling
@@ -34,13 +34,13 @@ class DatabaseManager:
     """
 
     def __init__(
-        self,
-        settings: Settings | None = None,
-        max_pool_size: int = 100,
-        min_pool_size: int = 10,
-        max_idle_time_ms: int = 300000,
-        connect_timeout_ms: int = 5000,
-        server_selection_timeout_ms: int = 30000,
+            self,
+            settings: Settings | None = None,
+            max_pool_size: int = 100,
+            min_pool_size: int = 10,
+            max_idle_time_ms: int = 300000,
+            connect_timeout_ms: int = 5000,
+            server_selection_timeout_ms: int = 30000,
     ) -> None:
         """
         Initialize the DatabaseManager.
@@ -139,21 +139,29 @@ class DatabaseManager:
 
     async def _create_indexes(self) -> None:
         """
-        Create necessary database indexes.
+        Create necessary database indexes based on ODMantic model definitions.
+
+        ODMantic automatically creates indexes defined in model_config["indexes"].
+        This method ensures additional runtime indexes if needed.
 
         Raises:
             RuntimeError: If index creation fails.
         """
         try:
-            collection = self.db.get_collection("ocr_result")
+            # ODMantic handles indexes defined in Document.model_config["indexes"]
+            # The engine.ensure_indexes() is called automatically on first use
+            # but we explicitly ensure them here for clarity
+            from persistence.mongodb.models import Document
 
-            # Create a unique index on the "file_name" field
+            collection = self.db.get_collection(Document.__collection__)
+
+            # Create a unique index on the "file_name" field (also defined in model_config)
             await collection.create_index("file_name", unique=True)
-            logger.info("Created unique index on 'file_name' field.")
+            logger.info("Ensured unique index on 'file_name' field.")
 
             # Create an index on 'created_at' for efficient time-based queries
             await collection.create_index("created_at")
-            logger.info("Created index on 'created_at' field.")
+            logger.info("Ensured index on 'created_at' field.")
 
         except Exception as e:
             logger.error(f"Failed to create indexes: {type(e).__name__}: {e}")
@@ -189,7 +197,7 @@ class DatabaseManager:
             logger.debug("No active database connection to close.")
 
     @asynccontextmanager
-    async def connection(self) -> AsyncGenerator["DatabaseManager", None]:
+    async def connection(self) -> AsyncGenerator["MongoDBClient", None]:
         """
         Context manager for database connection.
 
@@ -237,45 +245,42 @@ class DatabaseManager:
 
 
 # Global instance for backward compatibility and convenience
-_db_manager: DatabaseManager | None = None
+_client: MongoDBClient | None = None
 
 
-def get_db_manager() -> DatabaseManager:
-    """Get the global DatabaseManager instance."""
-    global _db_manager
-    if _db_manager is None:
-        _db_manager = DatabaseManager()
-    return _db_manager
+def get_client() -> MongoDBClient:
+    """Get the global MongoDBClient instance."""
+    global _client
+    if _client is None:
+        _client = MongoDBClient()
+    return _client
 
 
 # Backward compatibility functions (deprecated - use DatabaseManager directly)
 async def connect_to_db() -> None:
     """Initialize the global database connection."""
-    await get_db_manager().connect()
+    await get_client().connect()
 
 
 async def close_db_connection() -> None:
     """Close the global database connection."""
-    await get_db_manager().disconnect()
+    await get_client().disconnect()
 
 
-# Expose properties for backward compatibility
-@property
+# Expose async functions for backward compatibility
 async def client() -> AsyncIOMotorClient | None:
     """Get the global client (backward compatibility)."""
-    db_manager = get_db_manager()
+    db_manager = get_client()
     return db_manager.client if db_manager.is_connected else None
 
 
-@property
 async def db() -> AsyncIOMotorDatabase | None:
     """Get the global database (backward compatibility)."""
-    db_manager = get_db_manager()
+    db_manager = get_client()
     return db_manager.db if db_manager.is_connected else None
 
 
-@property
 async def engine() -> AIOEngine | None:
     """Get the global engine (backward compatibility)."""
-    db_manager = get_db_manager()
+    db_manager = get_client()
     return db_manager.engine if db_manager.is_connected else None
