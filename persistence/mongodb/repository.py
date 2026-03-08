@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Optional
 
+from odmantic import AIOEngine
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from persistence.base import BaseRepository
@@ -25,7 +26,7 @@ class DocumentRepository(BaseRepository[Document]):
             raise RuntimeError(DB_NOT_CONNECTED_ERROR)
 
     @property
-    def _engine(self):
+    def _engine(self) -> AIOEngine:
         """Get the ODMantic engine from the database manager."""
         return self._db_manager.engine
 
@@ -103,7 +104,12 @@ class DocumentRepository(BaseRepository[Document]):
             return True
         return False
 
-    async def save_result(self, file_name: str, pages: List[Page], metadata: dict = None) -> Document:
+    async def save_result(
+        self,
+        file_name: str,
+        pages: List[Page],
+        metadata: Optional[dict] = None,
+    ) -> Document:
         """
         Save a document with its pages to the database.
 
@@ -127,10 +133,11 @@ class DocumentRepository(BaseRepository[Document]):
             return await self._engine.save(existing_document)
 
         document = Document(
+            id=file_name,
             file_id=file_name,
             file_name=file_name,
             pages=pages,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         return await self.save(document)
@@ -154,7 +161,7 @@ class PageRepository:
             raise RuntimeError(DB_NOT_CONNECTED_ERROR)
 
     @property
-    def _engine(self):
+    def _engine(self) -> AIOEngine:
         """Get the ODMantic engine from the database manager."""
         return self._db_manager.engine
 
