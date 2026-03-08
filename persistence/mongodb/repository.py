@@ -1,6 +1,6 @@
 from typing import List
 
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from persistence.base import BaseRepository
 from persistence.mongodb.models import Document, Page
@@ -29,7 +29,12 @@ class DocumentRepository(BaseRepository[Document]):
         """Get the ODMantic engine from the database manager."""
         return self._db_manager.engine
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError, OSError)),
+        reraise=True,
+    )
     async def save(self, document: Document) -> Document:
         """
         Save a document to the database.
@@ -39,13 +44,11 @@ class DocumentRepository(BaseRepository[Document]):
 
         Returns:
             The saved document.
-        """
-        from odmantic.exceptions import DuplicateKeyError
 
-        try:
-            return await self._engine.save(document)
-        except DuplicateKeyError:
-            return await self.save(document)
+        Raises:
+            odmantic.exceptions.DuplicateKeyError: If a document with the same primary key exists.
+        """
+        return await self._engine.save(document)
 
     async def get_by_id(self, file_id: str) -> Document | None:
         """
