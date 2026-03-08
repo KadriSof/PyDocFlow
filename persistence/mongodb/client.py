@@ -1,6 +1,7 @@
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from odmantic import AIOEngine
@@ -11,19 +12,18 @@ from tenacity import (
     wait_exponential,
 )
 
-from persistence.settings import Settings
+from persistence.base import BaseClient
+from persistence.mongodb.settings import Settings
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 DB_NOT_CONNECTED_ERROR = "Database not connected. Call connect() first."
 
 
-class DatabaseManager:
+class MongoDBClient(BaseClient):
     """
-    Production-ready database manager class that encapsulates MongoDB connection logic.
-    
+    Production-ready MongoDB client implementation.
+
     Features:
     - Connection pooling for better performance under high load
     - Robust error handling with specific exception handling
@@ -34,13 +34,13 @@ class DatabaseManager:
     """
 
     def __init__(
-        self,
-        settings: Settings | None = None,
-        max_pool_size: int = 100,
-        min_pool_size: int = 10,
-        max_idle_time_ms: int = 300000,
-        connect_timeout_ms: int = 5000,
-        server_selection_timeout_ms: int = 30000,
+            self,
+            settings: Settings | None = None,
+            max_pool_size: int = 100,
+            min_pool_size: int = 10,
+            max_idle_time_ms: int = 300000,
+            connect_timeout_ms: int = 5000,
+            server_selection_timeout_ms: int = 30000,
     ) -> None:
         """
         Initialize the DatabaseManager.
@@ -174,7 +174,7 @@ class DatabaseManager:
         self._db = self.client.get_database(self.settings.mongo_db)
         self._engine = AIOEngine(client=self.client, database=self.settings.mongo_db)
 
-        await self._create_indexes()
+        # await self._create_indexes()  # TODO: To be refactored according to ODMantic Indexes management.
         logger.info(f"Database manager initialized for database: {self.settings.mongo_db}")
 
     async def disconnect(self) -> None:
@@ -189,7 +189,7 @@ class DatabaseManager:
             logger.debug("No active database connection to close.")
 
     @asynccontextmanager
-    async def connection(self) -> AsyncGenerator["DatabaseManager", None]:
+    async def connection(self) -> AsyncGenerator["MongoDBClient", None]:
         """
         Context manager for database connection.
 
@@ -237,14 +237,14 @@ class DatabaseManager:
 
 
 # Global instance for backward compatibility and convenience
-_db_manager: DatabaseManager | None = None
+_db_manager: MongoDBClient | None = None
 
 
-def get_db_manager() -> DatabaseManager:
+def get_db_manager() -> MongoDBClient:
     """Get the global DatabaseManager instance."""
     global _db_manager
     if _db_manager is None:
-        _db_manager = DatabaseManager()
+        _db_manager = MongoDBClient()
     return _db_manager
 
 
@@ -259,22 +259,19 @@ async def close_db_connection() -> None:
     await get_db_manager().disconnect()
 
 
-# Expose properties for backward compatibility
-@property
+# Expose async functions for backward compatibility
 async def client() -> AsyncIOMotorClient | None:
     """Get the global client (backward compatibility)."""
     db_manager = get_db_manager()
     return db_manager.client if db_manager.is_connected else None
 
 
-@property
 async def db() -> AsyncIOMotorDatabase | None:
     """Get the global database (backward compatibility)."""
     db_manager = get_db_manager()
     return db_manager.db if db_manager.is_connected else None
 
 
-@property
 async def engine() -> AIOEngine | None:
     """Get the global engine (backward compatibility)."""
     db_manager = get_db_manager()
