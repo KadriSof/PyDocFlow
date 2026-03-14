@@ -7,23 +7,105 @@ authors = [
     { name = "M.S.KADRI", email = "ms.kadri.dev@gmail.com" }
 ]
 dependencies = [
-    "dotenv>=0.9.9",
+    # Web framework
     "fastapi>=0.129.0",
-    "litellm>=1.81.14",
+    "uvicorn>=0.41.0",
+    "python-multipart>=0.0.22",
+    
+    # Database - MongoDB
     "motor>=3.7.1",
     "odmantic>=1.1.0",
-    "pdf2image>=1.17.0",
-    "pydantic-settings>=2.13.1",
     "pymongo>=4.16.0",
+    
+    # Database - PostgreSQL
+    "asyncpg>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    
+    # PDF and image processing
+    "pdf2image>=1.17.0",
     "pymupdf>=1.27.1",
     "pytesseract>=0.3.13",
+    
+    # LLM integration
+    "litellm>=1.81.14",
+    
+    # Configuration and utilities
+    "pydantic-settings>=2.13.1",
+    "dotenv>=0.9.9",
+    "tenacity>=9.1.4",
+    
+    # Testing
     "pytest>=9.0.2",
     "pytest-asyncio>=0.24.0",
-    "python-multipart>=0.0.22",
-    "tenacity>=9.1.4",
-    "uvicorn>=0.41.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.15.0",
+    "black>=25.1.0",
+    "pyright>=1.1.390",
+    "ruff>=0.9.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = [
+    "motor.*",
+    "odmantic.*",
+    "pymongo.*",
+    "pytesseract.*",
+    "pdf2image.*",
+    "fitz.*",
+    "PIL.*",
+]
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.venv
+  | \.git
+  | \.idea
+  | __pycache__
+  | \.mypy_cache
+  | \.pytest_cache
+  | build
+  | dist
+)/
+'''
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+include = ["persistence", "services", "ocr", "llm"]
+exclude = ["__pycache__", ".venv", ".git", ".idea"]
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[dependency-groups]
+dev = [
+    "black>=26.3.0",
+    "mypy>=1.19.1",
+    "pyright>=1.1.408",
+    "ruff>=0.15.5",
+]
