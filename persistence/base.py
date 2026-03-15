@@ -154,3 +154,29 @@ class BaseRepository[T](ABC):
             True if deleted successfully, False if entity not found.
         """
         ...
+
+
+class BaseDocumentRepository[T](BaseRepository[T], ABC):
+    """
+    Abstract base class for document repositories.
+    """
+
+    @abstractmethod
+    async def save_text_results(
+        self,
+        file_name: str,
+        texts: list[str],
+        metadata: dict[str, Any] | None = None,
+    ) -> T:
+        """
+        Convert raw text results to Page objects and save.
+
+        Args:
+            file_name: The name of the file.
+            texts: List of extracted texts for each page.
+            metadata: Optional metadata.
+
+        Returns:
+            The saved document object.
+        """
+        ...
