@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import Any, TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from persistence.schemas import DocumentCreate
 
 T = TypeVar("T")
 
@@ -162,19 +165,12 @@ class BaseDocumentRepository[T](BaseRepository[T], ABC):
     """
 
     @abstractmethod
-    async def save_text_results(
-        self,
-        file_name: str,
-        texts: list[str],
-        metadata: dict[str, Any] | None = None,
-    ) -> T:
+    async def save_from_schema(self, schema: "DocumentCreate") -> T:
         """
-        Convert raw text results to Page objects and save.
+        Save a document from a DocumentCreate schema.
 
         Args:
-            file_name: The name of the file.
-            texts: List of extracted texts for each page.
-            metadata: Optional metadata.
+            schema: The DocumentCreate schema containing document and page data.
 
         Returns:
             The saved document object.
