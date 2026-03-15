@@ -1,14 +1,15 @@
-from typing import List, Optional
+from typing import List
 
 from odmantic import AIOEngine
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from persistence.base import BaseRepository
+from persistence.base import BaseDocumentRepository
 from persistence.mongodb.models import Document, Page
 from persistence.mongodb.client import MongoDBClient, get_client, DB_NOT_CONNECTED_ERROR
+from persistence.schemas import DocumentCreate
 
 
-class DocumentRepository(BaseRepository[Document]):
+class DocumentRepository(BaseDocumentRepository[Document]):
     """Repository for document operations."""
 
     def __init__(self, db_manager: MongoDBClient | None = None) -> None:
@@ -104,40 +105,39 @@ class DocumentRepository(BaseRepository[Document]):
             return True
         return False
 
-    async def save_result(
-        self,
-        file_name: str,
-        pages: List[Page],
-        metadata: Optional[dict] = None,
-    ) -> Document:
+    async def save_from_schema(self, schema: DocumentCreate) -> Document:
         """
-        Save a document with its pages to the database.
+        Save a document from a DocumentCreate schema.
 
         Args:
-            file_name: The name of the file that was processed.
-            pages: List of Page objects representing the document pages.
-            metadata: Optional dictionary containing additional metadata.
+            schema: The DocumentCreate schema.
 
         Returns:
             Document: The saved document object.
         """
         from datetime import datetime
 
-        existing_document = await self.get_by_file_name(file_name)
+        pages = [
+            Page(page_number=p.page_number, content=p.content, metadata=p.metadata)
+            for p in schema.pages
+        ]
+
+        existing_document = await self.get_by_id(schema.file_id)
+        if not existing_document:
+            existing_document = await self.get_by_file_name(schema.file_name)
 
         if existing_document:
             existing_document.pages = pages
-            existing_document.metadata = metadata or {}
-            existing_document.metadata["overwrite"] = True
+            existing_document.metadata = schema.metadata
             existing_document.updated_at = datetime.now()
             return await self._engine.save(existing_document)
 
         document = Document(
-            id=file_name,
-            file_id=file_name,
-            file_name=file_name,
+            id=schema.file_id,
+            file_id=schema.file_id,
+            file_name=schema.file_name,
             pages=pages,
-            metadata=metadata or {},
+            metadata=schema.metadata,
         )
 
         return await self.save(document)

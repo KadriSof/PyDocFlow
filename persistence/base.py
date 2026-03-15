@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import Any, TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from persistence.schemas import DocumentCreate
 
 T = TypeVar("T")
 
@@ -152,5 +155,24 @@ class BaseRepository[T](ABC):
 
         Returns:
             True if deleted successfully, False if entity not found.
+        """
+        ...
+
+
+class BaseDocumentRepository[T](BaseRepository[T], ABC):
+    """
+    Abstract base class for document repositories.
+    """
+
+    @abstractmethod
+    async def save_from_schema(self, schema: "DocumentCreate") -> T:
+        """
+        Save a document from a DocumentCreate schema.
+
+        Args:
+            schema: The DocumentCreate schema containing document and page data.
+
+        Returns:
+            The saved document object.
         """
         ...
