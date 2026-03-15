@@ -4,11 +4,25 @@ services:
     image: mongo:latest
     container_name: pydocflow-mongodb
     ports:
-      - "27017:27017"  # Map host port 27017 to container port 27017
+      - "27017:27017"
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
     volumes:
-      - documents_data:/data/db  # Persist data in a named volume
+      - documents_data:/data/db
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: pydocflow-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-ocr_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
 volumes:
-  documents_data:  # Declare the volume
+  documents_data:
+  postgres_data:
